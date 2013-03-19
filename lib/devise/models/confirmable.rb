@@ -34,7 +34,7 @@ module Devise
 
       included do
         before_create :generate_confirmation_token, :if => :confirmation_required?
-        after_create  :send_on_create_confirmation_instructions, :if => :confirmation_required?
+        after_create  :send_on_create_confirmation_instructions, :if => :send_confirmation_notification?
         before_update :postpone_email_change_until_confirmation, :if => :postpone_email_change?
         after_update  :send_confirmation_instructions, :if => :reconfirmation_required?
       end
@@ -119,6 +119,12 @@ module Devise
         self.confirmed_at = Time.now.utc
       end
 
+      # Skips sending the confirmation notification email after_create. Unlike
+      # #skip_confirmation!, record still requires confirmation.
+      def skip_confirmation_notification!
+        @skip_confirmation_notification = true
+      end
+
       # If you don't want reconfirmation to be sent, neither a code
       # to be generated, call skip_reconfirmation!
       def skip_reconfirmation!
@@ -158,8 +164,11 @@ module Devise
         #   # allow_unconfirmed_access_for = 0.days
         #   confirmation_period_valid?   # will always return false
         #
+        #   # allow_unconfirmed_access_for = nil
+        #   confirmation_period_valid?   # will always return true
+        #
         def confirmation_period_valid?
-          confirmation_sent_at && confirmation_sent_at.utc >= self.class.allow_unconfirmed_access_for.ago
+          self.class.allow_unconfirmed_access_for.nil? || (confirmation_sent_at && confirmation_sent_at.utc >= self.class.allow_unconfirmed_access_for.ago)
         end
 
         # Checks if the user confirmation happens before the token becomes invalid
@@ -218,6 +227,10 @@ module Devise
 
         def reconfirmation_required?
           self.class.reconfirmable && @reconfirmation_required
+        end
+
+        def send_confirmation_notification?
+          confirmation_required? && !@skip_confirmation_notification
         end
 
       module ClassMethods
